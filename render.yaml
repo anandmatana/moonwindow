@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: moonwindow-api
+    runtime: node
+    rootDir: backend
+    buildCommand: ""
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: FRONTEND_URL
+        sync: false
+  - type: web
+    name: moonwindow-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

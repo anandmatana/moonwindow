@@ -5,13 +5,14 @@ export async function getWeather(location: LocationState): Promise<Weather> {
   const key = `mw-weather:${location.latitude.toFixed(2)}:${location.longitude.toFixed(2)}`
   const cached = localStorage.getItem(key)
   if (cached) { const value = JSON.parse(cached) as Weather; if (Date.now() - value.fetchedAt < TTL) return value }
-  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  const apiUrl = import.meta.env.VITE_API_URL as string | undefined
+  const url = new URL(apiUrl ? `${apiUrl.replace(/\/$/, '')}/api/weather` : 'https://api.open-meteo.com/v1/forecast')
   url.searchParams.set('latitude', String(location.latitude)); url.searchParams.set('longitude', String(location.longitude))
-  url.searchParams.set('current', 'cloud_cover,precipitation,relative_humidity_2m,visibility'); url.searchParams.set('forecast_days', '1')
+  if (!apiUrl) { url.searchParams.set('current', 'cloud_cover,precipitation,relative_humidity_2m,visibility'); url.searchParams.set('forecast_days', '1') }
   const response = await fetch(url); if (!response.ok) throw new Error('Weather unavailable')
-  const data = await response.json(); const current = data.current
+  const data = await response.json(); const current = apiUrl ? data : data.current
   const value = { cloudCover: current.cloud_cover ?? 0, precipitation: current.precipitation ?? 0,
-    visibility: current.visibility ?? 10000, humidity: current.relative_humidity_2m ?? 0, fetchedAt: Date.now() }
+    visibility: current.visibility ?? 10000, humidity: current.relative_humidity_2m ?? 0, fetchedAt: current.fetchedAt ?? Date.now() }
   localStorage.setItem(key, JSON.stringify(value)); return value
 }
 
