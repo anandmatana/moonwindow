@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://moonwindow.in/sitemap.xml

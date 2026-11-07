@@ -15,8 +15,8 @@ MoonWindow is a mobile-first Moon visibility website for India. It calculates th
 - Moonrise, moonset, phase, illumination and distance
 - Hourly Moon path and visibility timeline
 - Cached Open-Meteo cloud and visibility data
-- Compass-based **Find the Moon** experience
-- Camera-assisted **Sky Finder Beta**
+- 3D orientation-based **Find the Moon** experience using yaw, pitch and roll
+- Camera-assisted **Sky Finder** with direction and altitude alignment
 - Karwa Chauth occasion guide
 - Accuracy and privacy pages
 - Installable PWA with offline shell caching
@@ -56,7 +56,7 @@ The deployable static output is generated in `dist/`.
 | Route | Purpose |
 | --- | --- |
 | `/` | Live Moon status and viewing timeline |
-| `/find` | Compass Moon finder |
+| `/find` | 3D orientation Moon finder |
 | `/sky` | Camera-assisted Sky Finder |
 | `/moon` | Detailed astronomical data |
 | `/karwa-chauth-moon` | Occasion-specific Moon guide |

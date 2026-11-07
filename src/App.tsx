@@ -53,26 +53,42 @@ function Home({ location, setLocation, weather }: { location: LocationState; set
     <section className="feature-grid"><article className="visibility-card"><p className="kicker">Viewing conditions</p><div className="score-row"><div className="score-ring" style={{'--score': `${view.score * 3.6}deg`} as React.CSSProperties}><b>{view.score}</b><small>/100</small></div><div><h2>{view.label} chance of visibility</h2><p>{weather ? `${weather.cloudCover}% cloud cover · ${weather.humidity}% humidity` : 'Moon position is available. Weather could not be loaded.'}</p></div></div><div className="condition-row"><span>Position calculation <b>High confidence</b></span><span>Weather <b>{weather ? 'Updated now' : 'Unavailable'}</b></span><span>Location <b>{location.accuracy ? `±${Math.round(location.accuracy)} m` : 'City centre'}</b></span></div></article>
       <article className="occasion-card"><span className="occasion-orbit">◐</span><p className="kicker">Occasion guide</p><h2>Karwa Chauth Moon</h2><p>Location-aware moonrise, direction and weather guidance for your evening.</p><a href="/karwa-chauth-moon">Open guide →</a><small>Astronomical estimates are not official religious declarations.</small></article></section>
     <section className="details-strip"><div><p className="kicker">Tonight’s Moon</p><h2>{snapshot.phaseName}</h2><p>{snapshot.illumination.toFixed(0)}% illuminated from {Math.round(snapshot.distanceKm).toLocaleString('en-IN')} km away.</p></div><MoonArt illumination={snapshot.illumination}/><a className="text-link" href="/moon">View all details →</a></section>
-    <section className="explain"><p className="kicker">Simple, private, precise</p><h2>Everything you need to look up.</h2><div><article><span>01</span><h3>On-device astronomy</h3><p>Your phone calculates the Moon’s position locally. No account or location history.</p></article><article><span>02</span><h3>Weather-aware</h3><p>A measured confidence score combines altitude and current sky conditions.</p></article><article><span>03</span><h3>Point and find</h3><p>Use the compass or camera guidance to turn toward the Moon.</p></article></div></section>
+    <section className="explain"><p className="kicker">Simple, private, precise</p><h2>Everything you need to look up.</h2><div><article><span>01</span><h3>On-device astronomy</h3><p>Your phone calculates the Moon’s position locally. No account or location history.</p></article><article><span>02</span><h3>Weather-aware</h3><p>A measured confidence score combines altitude and current sky conditions.</p></article><article><span>03</span><h3>Point and find</h3><p>Use 3D phone orientation to align both direction and height with the Moon.</p></article></div></section>
   </main><Footer /></>
 }
 
-function Compass({ location, camera = false }: { location: LocationState; camera?: boolean }) {
-  const snapshot = getMoonSnapshot(location); const [heading, setHeading] = useState(0); const [started, setStarted] = useState(false); const video = useRef<HTMLVideoElement>(null)
-  const delta = ((snapshot.azimuth - heading + 540) % 360) - 180
+function SkyFinder({ location, camera = false }: { location: LocationState; camera?: boolean }) {
+  const snapshot = getMoonSnapshot(location)
+  const [orientation, setOrientation] = useState({ heading: 0, elevation: 0, roll: 0 })
+  const [started, setStarted] = useState(false)
+  const [sensorError, setSensorError] = useState('')
+  const video = useRef<HTMLVideoElement>(null)
+  const stream = useRef<MediaStream | null>(null)
+  const horizontalDelta = ((snapshot.azimuth - orientation.heading + 540) % 360) - 180
+  const verticalDelta = snapshot.altitude - orientation.elevation
+  const aligned = Math.abs(horizontalDelta) < 6 && Math.abs(verticalDelta) < 6
+  useEffect(() => () => { stream.current?.getTracks().forEach(track => track.stop()) }, [])
   const startSensors = async () => {
     const D = DeviceOrientationEvent as typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> }
-    if (D.requestPermission) await D.requestPermission()
-    window.addEventListener('deviceorientation', (event) => { const ios = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading; setHeading(ios ?? (event.alpha ? 360-event.alpha : 0)) })
-    if (camera) { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); if (video.current) { video.current.srcObject = stream; await video.current.play() } }
+    if (D.requestPermission && await D.requestPermission() !== 'granted') throw new Error('Motion access was not granted.')
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      const iosHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading
+      const screenAngle = screen.orientation?.angle ?? 0
+      const heading = (iosHeading ?? (event.alpha == null ? 0 : 360 - event.alpha) + screenAngle + 360) % 360
+      setOrientation({ heading, elevation: Math.max(-90, Math.min(90, 90 - (event.beta ?? 90))), roll: event.gamma ?? 0 })
+    }
+    if (typeof (window as Window & { ondeviceorientationabsolute?: unknown }).ondeviceorientationabsolute !== 'undefined') window.addEventListener('deviceorientationabsolute', onOrientation as EventListener)
+    else window.addEventListener('deviceorientation', onOrientation)
+    if (camera) { stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }); if (video.current) { video.current.srcObject = stream.current; await video.current.play() } }
     setStarted(true)
   }
-  return <div className={camera ? 'sky-page' : 'finder-page'}>{camera && <video ref={video} muted playsInline className="camera"/>}<div className="finder-overlay"><a className="back" href={camera?'/find':'/'}>←</a><Logo/><span className="beta">{camera?'Sky Finder · Beta':'Live compass'}</span>
-    {!started ? <div className="sensor-prompt"><MoonArt illumination={snapshot.illumination}/><h1>{camera?'Point your phone toward the Moon':'Turn toward the Moon'}</h1><p>Motion, compass{camera?' and camera':''} access helps guide your direction. Sensor data stays on this device.</p><button className="button gold" onClick={() => startSensors().catch(() => setStarted(true))}>Start {camera?'Sky Finder':'compass'} →</button></div> : <>
-      <div className="guide-copy"><p>{Math.abs(delta) < 8 ? 'You’re facing the Moon' : `Turn ${Math.abs(Math.round(delta))}° ${delta > 0 ? 'right' : 'left'}`}</p><h1>{snapshot.direction} · {Math.round(snapshot.azimuth)}°</h1><small>{Math.round(snapshot.altitude)}° above the horizon</small></div>
-      <div className="compass" style={{ transform: `rotate(${-heading}deg)` }}><span className="n">N</span><span className="e">E</span><span className="s">S</span><span className="w">W</span><div className="moon-marker" style={{ transform: `rotate(${snapshot.azimuth}deg) translateY(-132px)` }}><i>●</i></div><div className="needle"/></div>
-      <div className="calibration">∞ Move your phone in a figure eight to calibrate</div></>}
-    {!camera && <a className="camera-button" href="/sky">▣ Open camera view</a>}</div></div>
+  const guidance = aligned ? 'Moon aligned' : `${Math.abs(Math.round(horizontalDelta))}° ${horizontalDelta > 0 ? 'right' : 'left'} · ${Math.abs(Math.round(verticalDelta))}° ${verticalDelta > 0 ? 'up' : 'down'}`
+  return <div className={camera ? 'sky-page' : 'finder-page'}>{camera && <video ref={video} muted playsInline className="camera"/>}<div className="finder-overlay"><a className="back" href={camera?'/find':'/'}>←</a><Logo/><span className="beta">3D Sky Finder</span>
+    {!started ? <div className="sensor-prompt"><MoonArt illumination={snapshot.illumination}/><h1>Point your phone at the Moon</h1><p>3D motion and level data guide both direction and height.{camera?' Camera access adds a live sky view.':''} Sensor data stays on this device.</p>{sensorError && <p className="error">{sensorError}</p>}<button className="button gold" onClick={() => { setSensorError(''); startSensors().catch(error => setSensorError(error instanceof Error ? error.message : 'Sensors unavailable.')) }}>Start 3D finder →</button></div> : <>
+      <div className="guide-copy"><p>{guidance}</p><h1>{snapshot.direction} · {Math.round(snapshot.altitude)}° high</h1><small>Keep the phone upright and level</small></div>
+      <div className="sky-reticle"><div className="level-line" style={{ transform: `rotate(${-orientation.roll}deg)` }}/><div className="center-reticle"/><div className={`moon-target ${aligned ? 'aligned' : ''}`} style={{ transform: `translate(calc(-50% + ${Math.max(-42, Math.min(42, horizontalDelta)) * 4}px), calc(-50% + ${Math.max(-42, Math.min(42, -verticalDelta)) * 4}px))` }}><MoonArt illumination={snapshot.illumination}/><span>Moon</span></div></div>
+      <div className="calibration">Yaw {Math.round(orientation.heading)}° · Pitch {Math.round(orientation.elevation)}° · Roll {Math.round(orientation.roll)}°</div></>}
+    {!camera && <a className="camera-button" href="/sky">▣ Open live sky view</a>}</div></div>
 }
 
 function Details({ location }: { location: LocationState }) { const s = getMoonSnapshot(location); const q = nextMajorPhase(); return <><Header/><main className="content-page"><p className="kicker">Moon details</p><h1>{s.phaseName}</h1><p className="lede">A precise astronomical snapshot for {location.label}, calculated on your device.</p><div className="detail-hero"><MoonArt illumination={s.illumination}/><div><strong>{s.illumination.toFixed(1)}%</strong><span>illuminated</span></div></div><div className="detail-grid">{[['Altitude',`${s.altitude.toFixed(1)}°`],['Azimuth',`${s.azimuth.toFixed(1)}° ${s.direction}`],['Moonrise',formatTime(s.rise)],['Moonset',formatTime(s.set)],['Distance',`${Math.round(s.distanceKm).toLocaleString('en-IN')} km`],['Next phase',`${q.name} · ${formatDate(q.date)}`]].map(([k,v])=><article key={k}><span>{k}</span><b>{v}</b></article>)}</div><a className="button gold" href="/find">Find the Moon →</a></main><Footer/></> }
@@ -87,8 +103,8 @@ export default function App() {
   useEffect(() => { localStorage.setItem('mw-location', JSON.stringify(location)); getWeather(location).then(setWeather).catch(()=>setWeather(undefined)) }, [location])
   useEffect(() => { const id=setInterval(()=>tick(v=>v+1),60000); return()=>clearInterval(id) }, [])
   const path = useMemo(() => window.location.pathname.replace(/\/$/,'') || '/', [])
-  if (path === '/find') return <Compass location={location}/>
-  if (path === '/sky') return <Compass location={location} camera/>
+  if (path === '/find') return <SkyFinder location={location}/>
+  if (path === '/sky') return <SkyFinder location={location} camera/>
   if (path === '/moon') return <Details location={location}/>
   if (path === '/accuracy') return <InfoPage/>
   if (path === '/privacy') return <InfoPage privacy/>
