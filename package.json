@@ -1,0 +1,26 @@
+{
+  "name": "moonwindow",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "astronomy-engine": "^2.1.19",
+    "vite-plugin-pwa": "^1.1.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "vite": "^7.2.0",
+    "typescript": "^5.9.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "vitest": "^4.0.6"
+  }
+}
